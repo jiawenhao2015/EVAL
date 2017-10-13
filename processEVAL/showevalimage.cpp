@@ -26,7 +26,30 @@ using namespace cv;
 
 #define		START		0		//测试起始帧索引
 #define		END 		350		//测试结束帧索引
+
+
+string matrixName;
 //-------------------------------------------------------------------------------------------------------------------
+// 读取文件
+bool ReadFile(string filePath, vector<float>&errorVec)
+{
+	errorVec.clear();
+	ifstream infile(filePath);
+	float x;
+	if (!infile.is_open())
+	{
+		cout << "不能打开文件----" << filePath << endl;
+		return false;
+	}
+	while (!infile.eof())
+	{
+		infile >> x;
+		errorVec.push_back(x);
+	}
+	errorVec.pop_back();
+	return true;
+}
+
 //读入一个txt 返回一个m*n的矩阵
 Mat InitMat(string matrixPath, int m, int n)
 {
@@ -60,9 +83,9 @@ Mat InitMat(string matrixPath, int m, int n)
 //生成测试结果   输出每一帧的估计的关节点位置。
 set<pair<int, int>> wrongAction = { make_pair(2, 0), make_pair(2, 136), make_pair(7, 52), make_pair(7, 53), make_pair(7, 54) };
 
-void ComputeJoint()
+void ComputeJoint(string matrixName)
 {
-	Mat m = InitMat(PROJECT_MAT, FEATURE_NUM * 2, JOINTS_NUM * 2);//读取训练得到的模型矩阵 *2 是因为是2维的
+	Mat m = InitMat(matrixName, FEATURE_NUM * 2, JOINTS_NUM * 2);//读取训练得到的模型矩阵 *2 是因为是2维的
 
 	stringstream ss;
 
@@ -255,8 +278,8 @@ void ComputeRealError(vector<Data>& src, vector<int>&X, vector<int>&Y, vector<in
 }
 
 
-//批量生成测试结果 将测试结果显示出来 保存  并统计误差
-void saveTestResults()
+//批量生成测试结果 将测试结果显示出来 保存  并统计误差 bool flag 是否显示图片
+void saveTestResults(bool flag)
 {
 	Mat depthData(HEIGHT, WIDTH, CV_64FC3);
 	Mat photo(HEIGHT, WIDTH, CV_8UC3);
@@ -301,11 +324,14 @@ void saveTestResults()
 			 
 			sstest << "D:/EVAL20170704/EVAL/depth/" << action << "/" << frame << "/guessPoints.txt";
 			if (!readGuessFile(sstest.str(), myX, myY))continue;
-
-			drawJoints(photo, X, Y,1);//groundtruth
-			drawJoints(photo, myX, myY,0);//测试结果
-			imshow("img", photo);			
-			waitKey(1);
+			if (flag)
+			{
+				drawJoints(photo, X, Y, 1);//groundtruth
+				drawJoints(photo, myX, myY, 0);//测试结果
+				imshow("img", photo);
+				waitKey(1);
+			}
+			
 
 			//计算绝对误差 厘米数 保存到本地
 			sserror << "D:/EVAL20170704/EVAL/depth/" << action << "/" << frame << "/abserror.txt";
@@ -315,25 +341,7 @@ void saveTestResults()
 }
 
 
-// 读取文件
-bool ReadFile(string filePath, vector<float>&errorVec)
-{
-	errorVec.clear();
-	ifstream infile(filePath);	 
-	float x;
-	if (!infile.is_open())
-	{
-		cout << "不能打开文件！" << endl;
-		return false;
-	}
-	while (!infile.eof())
-	{
-		infile >> x;
-		errorVec.push_back(x);		
-	}
-	errorVec.pop_back();
-	return true;
-}
+
 
 //euclid error  每一帧的误差已经计算好  现在将他们汇总到一起 求平均
 //每一个action为一个单位
@@ -399,8 +407,8 @@ void computeFinalError(int action)
 //原来的统计误差方法 是分开统计的  
 int original()
 {
-	ComputeJoint();//1.首先计算测试关节点位置
-	saveTestResults();//2.统计每一帧测试关节点误差
+	ComputeJoint(matrixName);//1.首先计算测试关节点位置
+	saveTestResults(true);//2.统计每一帧测试关节点误差
 	for (int action = 0; action <= 7;action++)
 	{
 		computeFinalError(action);//3.汇总统计的误差 每一个action为一个单位
@@ -411,21 +419,22 @@ int original()
 }
 
 //将7个序列的所有误差统计到一起
-void computAllFinalError()
+void computAllFinalError(string matrixName)
 {
 	vector<vector<float>>error;//所有帧误差
 	vector<float>frameError;//单帧误差
 
 	char path[128];
-	sprintf_s(path, "E:/trainprocess/actionALLeuclid.txt");
+	sprintf_s(path, "E:/trainprocess/test/results/%s_actionALLeuclid.txt",matrixName.c_str());
 	ofstream euclidErrorFile(path);//所有测试帧的误差信息
-
-	sprintf_s(path, "E:/trainprocess/actionALLeuclidfinal.txt");
+	
+	sprintf_s(path, "E:/trainprocess/test/results/%s_actionALLeuclidfinal.txt", matrixName.c_str());
 	ofstream finalEuclidErrorFile(path);//所有帧平均误差
 
-	sprintf_s(path, "E:/trainprocess/actionALLpercentage.txt");
+	sprintf_s(path, "E:/trainprocess/test/results/%s_actionALLpercentage.txt", matrixName.c_str());
 	ofstream percentage(path);
 
+	
 	string euclidErrorPrefix("D:/EVAL20170704/EVAL/depth/");
 
 
@@ -475,11 +484,125 @@ void computAllFinalError()
 
 
 }
+
+//评价不同模型的最终结果 目前是使用误差和最小的
+void evaluateError()
+{
+	set<vector<float>>allframeError;//每一个模型的平均误差结果放到一个set里面
+
+	string prefix("E:/trainprocess/test/results/");
+	int cnt = 0;
+	for (int lambda1 = 1; lambda1 <= 1000; lambda1 += 50)
+	{
+		for (int lambda2 = 1; lambda2 <= 1000; lambda2 += 50)
+		{
+			string t[] = { "0.004114", "0.061159" };
+			for (int i = 0; i < 2; i++)
+			{
+				stringstream ss;
+				ss << prefix<< lambda1 << "_" << lambda2 << "_" << t[i] << "_actionALLeuclidfinal.txt";
+				string  errorPath = ss.str();
+				 
+				vector<float >  error;
+				if (!ReadFile(errorPath, error))continue;
+				cnt++;
+				allframeError.insert(error);				
+			}
+		}
+	}
+	//显示有效的测试结果数
+	cout << "cnt:" << cnt << "----set size:" << allframeError.size() << endl;
+	
+	/*for (auto it = allframeError.begin(); it != allframeError.end();it++)
+	{
+	for (int i = 0; i < it->size(); i++)
+	{
+	cout << (*it)[i]<<" ";
+	}
+	cout << endl;
+	}*/
+
+	//查看有效的映射矩阵的数量
+
+	 
+
+
+}
+
+//查看回归矩阵 用 set 剔除重复矩阵
+void checkMatrix()
+{
+	set<vector<float>> allmat;// 
+
+	string prefix("E:/trainprocess/train/matrix/");
+	int cnt = 0;
+	vector<string>matname;
+	int setsize = 0;
+	for (int lambda1 = 1; lambda1 <= 1000; lambda1 += 50)
+	{
+		for (int lambda2 = 1; lambda2 <= 1000; lambda2 += 50)
+		{
+			string t[] = { "0.004114", "0.061159" };
+			for (int i = 0; i < 2; i++)
+			{
+				stringstream ss;
+				ss << prefix << lambda1 << "_" << lambda2 << "_" << t[i] << ".txt";
+				string  errorPath = ss.str();
+
+				vector<float >  error;
+				if (!ReadFile(errorPath, error))continue;
+				cnt++;
+				allmat.insert(error);
+				int nowsize = allmat.size();
+				if (nowsize != setsize)
+				{
+					setsize = nowsize;
+					matname.push_back(errorPath);
+				}
+			}
+		}
+	}
+	//显示有效的测试结果数
+	cout << "cnt:" << cnt << "----set size:" << allmat.size() << endl;
+
+	 
+	//查看有效的映射矩阵的数量
+	for (int i = 0; i < matname.size();i++)
+	{
+		cout << matname[i] << endl;
+	}
+
+
+
+}
 int main()
 {
-	ComputeJoint();//1.首先计算测试关节点位置
-	saveTestResults();//2.统计每一帧测试关节点误差	
-	computAllFinalError();//3计算所有误差
+	//551 501 被我掐断
+
+	checkMatrix();
+
+	for (int lambda1 = 551; lambda1 <= 1000;lambda1+=50)
+	{
+		for (int lambda2 = 501; lambda2 <= 1000; lambda2 += 50)
+		{
+			string t[] = { "0.004114" ,"0.061159"};
+			for (int i = 0; i < 2;i++)
+			{
+				stringstream ss;
+				ss << "E:/trainprocess/train/matrix/"<< lambda1 << "_" << lambda2 << "_" << t[i] << ".txt";
+				matrixName = ss.str();
+				cout << matrixName << endl;
+				ComputeJoint(matrixName);//1.首先计算测试关节点位置
+				saveTestResults(false);//2.统计每一帧测试关节点误差	
+				matrixName = to_string(lambda1) + "_" + to_string(lambda2) + "_" + t[i];
+				
+				computAllFinalError(matrixName);//3计算所有误差
+			}
+		}
+	}
+
+	
+	
 
 	system("PAUSE");
 	return 0;
