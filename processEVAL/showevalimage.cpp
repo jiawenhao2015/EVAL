@@ -10,9 +10,11 @@
 #include "ImageShow.h"
 #include "Loading.h"
 #include "opencv2/imgproc/imgproc.hpp" 
+  
 
 using namespace std;
 using namespace cv;
+
 
 #define HEIGHT 240
 #define WIDTH  320
@@ -81,7 +83,8 @@ Mat InitMat(string matrixPath, int m, int n)
 }
 
 //生成测试结果   输出每一帧的估计的关节点位置。
-set<pair<int, int>> wrongAction = { make_pair(2, 0), make_pair(2, 136), make_pair(7, 52), make_pair(7, 53), make_pair(7, 54) };
+set<pair<int, int>> wrongAction = { make_pair(2, 0), make_pair(2, 136), make_pair(7, 52),
+									make_pair(7, 53), make_pair(7, 54) };
 
 void ComputeJoint(string matrixName)
 {
@@ -524,13 +527,9 @@ void evaluateError()
 
 	//查看有效的映射矩阵的数量
 
-	 
-
-
 }
-
 //查看回归矩阵 用 set 剔除重复矩阵
-void checkMatrix()
+void checkMatrix2()
 {
 	set<vector<float>> allmat;// 
 
@@ -542,7 +541,7 @@ void checkMatrix()
 	{
 		for (int lambda2 = 1; lambda2 <= 1000; lambda2 += 50)
 		{
-			string t[] = { "0.004114", "0.061159" };
+			string t[] = { "0.004526", "0.061159" };
 			for (int i = 0; i < 2; i++)
 			{
 				stringstream ss;
@@ -564,26 +563,73 @@ void checkMatrix()
 	}
 	//显示有效的测试结果数
 	cout << "cnt:" << cnt << "----set size:" << allmat.size() << endl;
-
 	 
 	//查看有效的映射矩阵的数量
 	for (int i = 0; i < matname.size();i++)
 	{
 		cout << matname[i] << endl;
 	}
-
-
-
 }
+//由于矩阵名字并不规则 直接读取文件夹下矩阵文件名 存到vector里  
+void checkMatrix(vector<string> & matname)
+{
+	 ////读list文件 读矩阵
+	ifstream infile("E:\\trainprocess\\train\\matrix\\LIST.TXT");
+	vector<string>matrxPath;
+	if (!infile.is_open())
+	{
+		cout << "不能打开文件----checkMatrix"  << endl;
+		return;
+	}
+	string t;
+	while (!infile.eof())
+	{
+		infile >> t;
+		matrxPath.push_back(t);
+	}
+	matrxPath.pop_back(), matrxPath.pop_back(), matrxPath.pop_back();//后2个没有用
+	//////////---------------------------
+
+	int setsize = 0;
+	set<vector<float>> allmat;
+	
+	for (int i = 0; i < matrxPath.size();i++)
+	{
+		vector<float >  temp;
+		if (!ReadFile("E:\\trainprocess\\train\\matrix\\"+matrxPath[i], temp))continue;	
+
+		allmat.insert(temp);
+		int nowsize = allmat.size();
+		if (nowsize != setsize)
+		{
+			setsize = nowsize;
+			matname.push_back(matrxPath[i]);
+		}
+		allmat.insert(temp);
+	}
+	cout <<"***********"<< allmat.size() << endl;
+	 
+	
+}
+
 int main()
 {
-	//551 501 被我掐断
+	
+	vector<string>matname;
+	checkMatrix(matname);
 
-	checkMatrix();
 
-	for (int lambda1 = 551; lambda1 <= 1000;lambda1+=50)
+	for (string name : matname)
 	{
-		for (int lambda2 = 501; lambda2 <= 1000; lambda2 += 50)
+		string t = "E:\\trainprocess\\train\\matrix\\" + name;
+		ComputeJoint(t);//1.首先计算测试关节点位置
+		saveTestResults(false);//2.统计每一帧测试关节点误差	
+		computAllFinalError(name);//3计算所有误差
+	}
+
+	for (int lambda1 = 1; lambda1 <= 1000;lambda1+=50)
+	{
+		for (int lambda2 = 1; lambda2 <= 1000; lambda2 += 50)
 		{
 			string t[] = { "0.004114" ,"0.061159"};
 			for (int i = 0; i < 2;i++)
@@ -601,9 +647,7 @@ int main()
 		}
 	}
 
-	
-	
-
 	system("PAUSE");
 	return 0;
 }
+
