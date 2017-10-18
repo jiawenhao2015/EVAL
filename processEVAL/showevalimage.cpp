@@ -30,7 +30,7 @@ using namespace cv;
 #define		END 		350		//测试结束帧索引
 
 
-string matrixName;
+
 //-------------------------------------------------------------------------------------------------------------------
 // 读取文件
 bool ReadFile(string filePath, vector<float>&errorVec)
@@ -86,9 +86,13 @@ Mat InitMat(string matrixPath, int m, int n)
 set<pair<int, int>> wrongAction = { make_pair(2, 0), make_pair(2, 136), make_pair(7, 52),
 									make_pair(7, 53), make_pair(7, 54) };
 
-void ComputeJoint(string matrixName)
+void ComputeJoint(string matrixPath)
 {
-	Mat m = InitMat(matrixName, FEATURE_NUM * 2, JOINTS_NUM * 2);//读取训练得到的模型矩阵 *2 是因为是2维的
+	Mat m = InitMat(matrixPath, FEATURE_NUM * 2, JOINTS_NUM * 2);//读取训练得到的模型矩阵 *2 是因为是2维的
+
+	string pr("E:\\trainprocess\\train\\matrix\\");
+	string t = matrixPath.substr(pr.length());
+
 
 	stringstream ss;
 
@@ -112,7 +116,7 @@ void ComputeJoint(string matrixName)
 
 
 			ss.str("");
-			ss << "D:/EVAL20170704/EVAL/depth/" << action << "/" << frame << "/guessPoints.txt";
+			ss << "D:/EVAL20170704/EVAL/depth/" << action << "/" << frame << "/guessPoints"<<t;
 			ofstream of(ss.str());
 			for (int i = 0; i < JOINTS_NUM; i++)//输出到本地
 			{
@@ -182,8 +186,8 @@ bool readGuessFile(string filePath, vector<int>&xVec, vector<int>&yVec)
 	while (!infile.eof())
 	{
 		infile >> temp >> temp2 ;
-		xVec.push_back(temp);		
-		yVec.push_back(temp2);
+		xVec.push_back(temp+0.5);//为了保证四舍五入int a = b+0.5;		
+		yVec.push_back(temp2+0.5);
 	}
 	xVec.erase(xVec.end() - 1);
 	yVec.erase(yVec.end() - 1);
@@ -319,16 +323,17 @@ void saveTestResults(bool flag)
 
 			ssgroundtruth << "D:/EVAL20170704/EVAL/joints/joint" << action << "_" << frame << ".txt";
 			if (!readGroundTruth(ssgroundtruth.str(), X, Y))continue;
-			
-			sspointcloud << "D:/EVAL20170704/EVAL/depth/depth" << action << "_" << frame << ".txt";
-			Load.DownLoad_Info(sspointcloud.str(), src, 1);
-			photo = ShowTool.getPhoto(src);
-			temp = ShowTool.getPhoto(src);//保存一下原始数据  不能用temp=photo 因为是引用！相当于本身
-			 
+									 
 			sstest << "D:/EVAL20170704/EVAL/depth/" << action << "/" << frame << "/guessPoints.txt";
 			if (!readGuessFile(sstest.str(), myX, myY))continue;
+			
 			if (flag)
 			{
+				sspointcloud << "D:/EVAL20170704/EVAL/depth/depth" << action << "_" << frame << ".txt";
+				Load.DownLoad_Info(sspointcloud.str(), src, 1);
+				photo = ShowTool.getPhoto(src);
+				temp = ShowTool.getPhoto(src);//保存一下原始数据  不能用temp=photo 因为是引用！相当于本身
+
 				drawJoints(photo, X, Y, 1);//groundtruth
 				drawJoints(photo, myX, myY, 0);//测试结果
 				imshow("img", photo);
@@ -410,6 +415,7 @@ void computeFinalError(int action)
 //原来的统计误差方法 是分开统计的  
 int original()
 {
+	string matrixName;
 	ComputeJoint(matrixName);//1.首先计算测试关节点位置
 	saveTestResults(true);//2.统计每一帧测试关节点误差
 	for (int action = 0; action <= 7;action++)
@@ -615,38 +621,17 @@ void checkMatrix(vector<string> & matname)
 int main()
 {
 	
-	vector<string>matname;
-	checkMatrix(matname);
+	vector<string>matnames;
+	checkMatrix(matnames);
 
 
-	for (string name : matname)
+	for (string name : matnames)
 	{
 		string t = "E:\\trainprocess\\train\\matrix\\" + name;
 		ComputeJoint(t);//1.首先计算测试关节点位置
-		saveTestResults(false);//2.统计每一帧测试关节点误差	
-		computAllFinalError(name);//3计算所有误差
+	//	saveTestResults(false);//2.统计每一帧测试关节点误差	
+		//computAllFinalError(name);//3计算所有误差
 	}
-
-	for (int lambda1 = 1; lambda1 <= 1000;lambda1+=50)
-	{
-		for (int lambda2 = 1; lambda2 <= 1000; lambda2 += 50)
-		{
-			string t[] = { "0.004114" ,"0.061159"};
-			for (int i = 0; i < 2;i++)
-			{
-				stringstream ss;
-				ss << "E:/trainprocess/train/matrix/"<< lambda1 << "_" << lambda2 << "_" << t[i] << ".txt";
-				matrixName = ss.str();
-				cout << matrixName << endl;
-				ComputeJoint(matrixName);//1.首先计算测试关节点位置
-				saveTestResults(false);//2.统计每一帧测试关节点误差	
-				matrixName = to_string(lambda1) + "_" + to_string(lambda2) + "_" + t[i];
-				
-				computAllFinalError(matrixName);//3计算所有误差
-			}
-		}
-	}
-
 	system("PAUSE");
 	return 0;
 }
