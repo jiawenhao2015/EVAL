@@ -1,5 +1,5 @@
- clear;
- clc;
+clear;
+clc;
 lambda1 = 0.001;
 
 while(lambda1 <=1)
