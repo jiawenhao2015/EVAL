@@ -15,6 +15,11 @@ using namespace cv;
 #define HEIGHT 240
 #define WIDTH  320
 
+
+int actionStart, actionEnd;
+int frameStart, frameEnd;
+int index;//用来控制训练与测试的比例 index=5 说明每5个取一个测试
+
 bool readGroundTruth(string filePath, vector<int>&xVec, vector<int>&yVec)
 {
 	ifstream infile(filePath);
@@ -98,8 +103,8 @@ void integrateDistanceFile(string path, ofstream& allJointsDistanceFile)
 	vector<int>yVec;
 	if (!readGroundTruth(path, xVec, yVec))return;
 
-	allJointsDistanceFile << xVec[3] - xVec[4] << " " << yVec[3] - yVec[4]<<" "
-						  << xVec[6] - xVec[7] << " " << yVec[6] - yVec[7] << " "<< endl;	 
+	allJointsDistanceFile << xVec[3] - xVec[4] << " " << yVec[3] - yVec[4]<<" "  
+						  << xVec[6] - xVec[7] << " " << yVec[6] - yVec[7] << " "<< endl;	 //从0开始
 }
 //有问题的 是 action 2 frame 136 特征点  
 //
@@ -121,14 +126,14 @@ void genTrainData()
 	//ofstream allJointsDistanceFile("E:/trainprocess/allJointsDisFile.txt");
 
 	
-	for (int action = 0; action <= 7; action++)//
+	for (int action = actionStart; action <= actionEnd; action++)//
 	{
 		 //每10帧 留出一个人做测试 其余训练(frame % 10 == 0)
-		for (int frame = 0; frame <= 350;frame++)
+		for (int frame = frameStart; frame <= frameEnd; frame++)
 		{	
 			if (wrongAction.count(make_pair(action,frame))) continue;
 
-			if (frame % 10 == 0)continue;
+			if (frame % index == 0)continue;
 			sprintf_s(featurePath,  "%d/%d/featurePoints.txt", action, frame);
 			sprintf_s(groundTruthPath, "joint%d_%d.txt", action, frame);
 				
@@ -157,13 +162,13 @@ void genDistanceData()
 	string groundTruthPathPrefix("D:/EVAL20170704/EVAL/joints/");
 	char groundTruthPath[128];
 	
-	for (int action = 0; action <= 7; action++)//
+	for (int action = actionStart; action <= actionEnd; action++)//
 	{
 		//每10帧 留出一个人做测试 其余训练(frame % 10 == 0)
-		for (int frame = 0; frame <= 350; frame++)
+		for (int frame = frameStart; frame <= frameEnd; frame++)
 		{
 			if (wrongAction.count(make_pair(action, frame))) continue;
-			if (frame % 10 == 0)continue;
+			if (frame % index == 0)continue;
 			
 			sprintf_s(groundTruthPath, "joint%d_%d.txt", action, frame);
 			ifstream isexist1(groundTruthPathPrefix + groundTruthPath);
@@ -179,7 +184,12 @@ void genDistanceData()
 
 int main()
 {
-	//genTrainData();
+	actionStart = 2,actionEnd = 2;
+	frameStart = 3, frameEnd = 450;
+	index = 5;
+
+
+	genTrainData();
 	genDistanceData();
 	getchar();
 	return 0;
